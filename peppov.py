@@ -68,11 +68,11 @@ class Project(HasTraits):
 class Portfolio(HasTraits):
     """Class to manage and analyse a portfolio of projects"""
     
-    all_tags = [] #list of possible tags for the Projects
+    
     all_properties = ['fun','belang','dringendheid','goeiedaad','plieslies'] #list of all properties (values between 0 and 5)    
     current_project = Int(default_value=1)   
     projects = List(Project)  # 
-    selection = List(Project) # selection of projects, based on tags
+    selection = Property(List(Project), depends_on = ['projects', 'tags_to_include', 'tags_to_exclude']) # selection of projects, based on tags
     repr_projects = Property(List, depends_on = 'projects')    
     repr_selection = Property(List, depends_on = 'selection')
     
@@ -83,7 +83,7 @@ class Portfolio(HasTraits):
     tags_to_exclude = List(Str)
     button_add = Button("Add project")
     button_edit = Button("Edit project")
-    button_filter = Button("Filter projects")    
+       
     
     # Analysis
     to_plot_x = Str()
@@ -91,11 +91,11 @@ class Portfolio(HasTraits):
     x = Property(Array, depends_on=['to_plot_x', 'property_values'])
     y = Property(Array, depends_on=['to_plot_y', 'property_values'])
     # sliders for the analysis    
-    fun = Range(0,5)
-    dringendheid = Range(0,5)
-    belang = Range(0,5)
-    goeiedaad = Range(0,5)
-    plieslies = Range(0,5)    
+    fun = Range(0,5,1)
+    dringendheid = Range(0,5,1)
+    belang = Range(0,5,1)
+    goeiedaad = Range(0,5,1)
+    plieslies = Range(0,5,1) 
     
     priority_projects = Property(List, depends_on = all_properties + ['selection'])
     
@@ -110,6 +110,10 @@ class Portfolio(HasTraits):
     def _get_repr_projects(self):
         return [str(p.projectnumber) + ' - ' + p.name for p in self.projects]
         
+    def _get_selection(self):
+        self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude)
+        return self._selection
+    
     def _get_repr_selection(self):
         return [str(p.projectnumber) + ' - ' + p.name for p in self.selection]
         
@@ -127,7 +131,6 @@ class Portfolio(HasTraits):
                     UItem('button_edit'),                
                     Item('tags_to_include', editor=CSVListEditor()),
                     Item('tags_to_exclude', editor=CSVListEditor()),
-                    UItem('button_filter'),
                     Item('repr_selection', label='Selection of projects', editor=ListStrEditor(editable=False)),
                     label='Projects'),
                 Group(
@@ -190,7 +193,7 @@ class Portfolio(HasTraits):
         p = Project(projectnumber=projectnumber, **kwargs)
         
         self.projects.append(p)
-        self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude) 
+
         
     def edit_project(self, projectnumber):
         """Edit a project"""
@@ -199,13 +202,7 @@ class Portfolio(HasTraits):
             if project.projectnumber == projectnumber:
                 project.configure_traits(view='view_all')
                 break
-        self.filter_projects(incl=['tagthatdoesnotexist'])
-        self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude) 
-        
-        
-    def _projects_changed(self):
-        """Always update the selection when the projects change"""
-        self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude)
+
     
     def filter_projects(self, incl=[], excl=[]):
         """Filter projects and update self.selection"""
@@ -228,7 +225,7 @@ class Portfolio(HasTraits):
             if keep:
                 selection.append(project)
                 
-        self.selection = selection
+        self._selection = selection
         
     def __str__(self):
         try:
@@ -242,11 +239,7 @@ class Portfolio(HasTraits):
         
     def _button_edit_fired(self):
         self.edit_project(self.current_project)
-        #self._get_belang()
-        #self._get_fun()        
-
-    def _button_filter_fired(self):
-        self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude)            
+          
         
     def read_csv(self, filename):
         """Read projects from a csv file"""
@@ -282,16 +275,9 @@ class Portfolio(HasTraits):
 
 
 if __name__ == "__main__":
-#   p = PlotterApplication()
-#   p.configure_traits()
 
-    #demo = Demo()
-    #demo.configure_traits()
     
-    p1 = Project(projectnumber=1, name="eerste project", tags=['huis', 'familie', 'persoonlijk'], fun=5, belang=4, plieslies=3)
-    p2 = Project(projectnumber=2, name="2e project", tags=['huis', 'familie', 'spel'], fun=4, belang=4, plieslies=3)
-    #p.configure_traits()
     pf = Portfolio()
-    pf.all_tags = ['huis', 'familie', 'persoonlijk', 'spel']
-    pf.all_properties = ['fun', 'belang', 'plieslies']
-    pf.projects=[p1,p2]
+    pf.read_csv('testwrite.csv')
+    pf.configure_traits()
+    
