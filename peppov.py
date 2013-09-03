@@ -14,85 +14,6 @@ from numpy import array,poly1d,arange,linspace
 from collections import OrderedDict
 import pdb
 
-class Person(HasTraits):
-   name = Str
-   age = Int
-   height = Float
-   weight = Float
-
-   bmi = Property(Float,depends_on=["height","weight"])
-
-   view = View(
-               Item("height",label = "Height / m"),
-               Item("weight",label = "Weight / kg"),
-               Item("bmi"),
-               buttons=[RevertButton,OKButton,CancelButton],
-              )
-
-   def _get_bmi(self):
-      return self.weight/self.height**2
-
-#p = Person(name="Billy",age=18,height=2.,weight=90)
-#p.configure_traits()
-#
-#print p.name,p.age.p.height,p.weight
-
-
-class PlotterApplication(HasTraits):
-   c0 = Range(-5.,5.)
-   c1 = Range(-5.,5.)
-   c2 = Range(-5.,5.)
-
-   xdata = Array
-   ydata = Property(Array,depends_on=["c0","c1","c2"])
-
-   #Set the coeffients to 0 as default
-   def _c0_default(self): return 0.
-   def _c1_default(self): return 0.
-   def _c2_default(self): return 0.
-
-   def _xdata_default(self): return linspace(-10,10,100)
-
-   def _get_ydata(self):
-      poly = poly1d([self.c2,self.c1,self.c0])
-      return poly(self.xdata)
-
-   traits_view = View(
-                  ChacoPlotItem("xdata","ydata", y_bounds=(-10.,10.),y_auto=False,resizable=True,show_label=False,x_label="x",y_label="y",title=""),
-                  Item('c0'),
-                  Item('c1'),
-                  Item('c2'),
-                  resizable = True,
-                  width=900, height=800,
-                  title="Plot App"
-                     )
-
-import random
-
-
-class Demo(HasTraits):
-
-    my_list = List(Str)
-
-    add = Button("ADD")
-    clear = Button("CLEAR")
-
-    traits_view = \
-        View(
-            UItem('my_list', editor=ListStrEditor(auto_add=False)),
-            UItem('add'),
-            UItem('clear'),
-        )
-
-    def _my_list_default(self):
-        return ['Item1', 'Item2']
-
-    def _add_fired(self):
-        new_item = "Item%d" % random.randint(3, 999)
-        self.my_list.append(new_item)
-
-    def _clear_fired(self):
-        self.my_list = []
 
 
 class Project(HasTraits):
@@ -231,7 +152,8 @@ class Portfolio(HasTraits):
         """Edit a project"""
         p = self.projects[projectnumber]
         p.configure_traits(view='view_all')
-        self.filter_projects()
+        self.filter_projects(incl=['tagthatdoesnotexist'])
+        self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude) 
         
         
     def filter_projects(self, incl=[], excl=[]):
@@ -269,8 +191,8 @@ class Portfolio(HasTraits):
         
     def _button_edit_fired(self):
         self.edit_project(self.current_project)
-        self._get_belang()
-        self._get_fun()        
+        #self._get_belang()
+        #self._get_fun()        
 
     def _button_filter_fired(self):
         self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude)            
