@@ -13,6 +13,7 @@ from chaco.chaco_plot_editor import ChacoPlotItem
 from numpy import array,poly1d,arange,linspace
 from collections import OrderedDict
 import pdb
+import numpy as np
 
 
 
@@ -88,34 +89,45 @@ class Project(HasTraits):
 class Portfolio(HasTraits):
     """Class to manage and analyse a portfolio of projects"""
     
+    all_tags = [] #list of possible tags for the Projects
+    all_properties = [] #list of all properties (values between 0 and 5)    
     current_project = Int(default_value=1)   
-    projects = Dict()  # int:Project pairs
-    selection = Dict() # selection of projects, based on tags
+    projects = List(Project)  # 
+    selection = List(Project) # selection of projects, based on tags
     repr_projects = Property(List, depends_on = 'projects')    
-    repr_selection = Property(List, depends_on = 'selection')    
-    fun = Property(Array, depends_on = "selection")
-    belang = Property(Array, depends_on = "selection")
+    repr_selection = Property(List, depends_on = 'selection')
+    
+    to_plot_x = Str()
+    to_plot_y = Str()
+    x = Property(Array, depends_on=['to_plot_x', 'property_values'])
+    y = Property(Array, depends_on=['to_plot_y', 'property_values'])
+    
+    #dictionary of property values, property:list of values
+    property_values = Property(Dict, depends_on = "selection")  
+    
     tags_to_include = List(Str)
     tags_to_exclude = List(Str)
     button_add = Button("Add project")
     button_edit = Button("Edit project")
     button_filter = Button("Filter projects")    
     
-    def _get_fun(self):
-        if self.selection.keys()==[]:
-            self.selection = self.projects
-        return [p.fun for p in self.selection.values()] 
+    def _get_property_values(self):
+        property_values = {}
+        for prop in self.all_properties:
+            property_values[prop] = [getattr(project, prop) for project in self.selection]
+        return property_values            
         
-    def _get_belang(self):
-        if self.selection.keys()==[]:
-            self.selection = self.projects
-        return [p.belang for p in self.selection.values()]
-    
     def _get_repr_projects(self):
-        return [str(p.projectnumber) + ' - ' + p.name for p in self.projects.values()]
+        return [str(p.projectnumber) + ' - ' + p.name for p in self.projects]
         
     def _get_repr_selection(self):
-        return [str(p.projectnumber) + ' - ' + p.name for p in self.selection.values()]
+        return [str(p.projectnumber) + ' - ' + p.name for p in self.selection]
+        
+    def _get_x(self):
+        return np.ndarray(self.property_values.get(self.to_plot_x, np.zeros(len(self.selection))))
+        
+    def _get_y(self):
+        return np.ndarray(self.property_values.get(self.to_plot_y, np.zeros(len(self.selection))))
     
     view = View(
                 Item('repr_projects', label='Projects',editor=ListStrEditor(editable=False)),
@@ -126,32 +138,33 @@ class Portfolio(HasTraits):
                 Item('tags_to_exclude', editor=CSVListEditor()),
                 UItem('button_filter'),
                 Item('repr_selection', label='Selection of projects', editor=ListStrEditor(editable=False)),
-                ChacoPlotItem("fun","belang", type='scatter',
+                ChacoPlotItem("x","y", type='scatter',
                                 y_bounds=(0.,6.),y_auto=False,
                                 x_bounds=(0.,6.),x_auto=False,
-                                resizable=True,show_label=False,
-                                x_label="Fun",y_label="Belang",title=""),
+                                resizable=True, show_label=False,
+                                x_label=to_plot_x.value, y_label=to_plot_y.value, title=""),
                 resizable=True
                 )
     
     
     def _get_new_projectnumber(self):
-        try:
-            return 1+sorted(self.projects.keys())[-1]
-        except:
-            return 1
+        return 1 + self.projects[-1].projectnumber
+        
                
     def add_project(self):
         """Add a project to the dictionary of projects"""
         projectnumber = self._get_new_projectnumber()
         p = Project(projectnumber=projectnumber)
         p.configure_traits(view='view_all')
-        self.projects[projectnumber] = p
+        self.projects.append(p)
         
     def edit_project(self, projectnumber):
         """Edit a project"""
-        p = self.projects[projectnumber]
-        p.configure_traits(view='view_all')
+        
+        for project in self.projects:
+            if project.projectnumber == projectnumber:
+                project.configure_traits(view='view_all')
+                break
         self.filter_projects(incl=['tagthatdoesnotexist'])
         self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude) 
         
@@ -159,8 +172,8 @@ class Portfolio(HasTraits):
     def filter_projects(self, incl=[], excl=[]):
         """Filter projects and update self.selection"""
         
-        selection=OrderedDict()
-        for id, project in self.projects.items():
+        selection=[]
+        for project in self.projects:
             keep = True
             for tag in incl:
                 if project.has_tag(tag):
@@ -175,7 +188,7 @@ class Portfolio(HasTraits):
                 else:
                     pass
             if keep:
-                selection[id]=project
+                selection.append(project)
                 
         self.selection = selection
         
@@ -212,4 +225,6 @@ if __name__ == "__main__":
     p2 = Project(projectnumber=2, name="2e project", tags=['huis', 'familie', 'spel'], fun=4, belang=4, plieslies=3)
     #p.configure_traits()
     pf = Portfolio()
-    pf.projects=OrderedDict([(1,p1),(2,p2)])
+    pf.all_tags = ['huis', 'familie', 'persoonlijk', 'spel']
+    pf.all_properties = ['fun', 'belang', 'plieslies']
+    pf.projects=[p1,p2]
