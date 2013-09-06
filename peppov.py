@@ -6,7 +6,7 @@ Created on Thu Aug  8 21:42:12 2013
 """
 
 
-from traits.api import HasTraits,Int,Float,Str,Property,Range,Array,Dict,List,Button
+from traits.api import HasTraits,Int,Bool,Float,Str,Property,Range,Array,Dict,List,Button
 from traitsui.api import View,Item,Label,ListStrEditor,UItem,Group,ListEditor,CSVListEditor
 from traitsui.menu import OKButton, CancelButton,RevertButton
 from chaco.chaco_plot_editor import ChacoPlotItem
@@ -53,12 +53,6 @@ class Project(HasTraits):
         for k,v in kwargs.items():
             setattr(self, k, v)
     
-    def _add_fired(self):
-        self.tags.append(self.singletag)
-        
-    def _remove_fired(self):
-        self.tags.remove(self.singletag)
-        
     def has_tag(self, tag):
         return tag in self.tags
         
@@ -97,8 +91,8 @@ class Portfolio(HasTraits):
     goeiedaad = Range(0,5,1)
     plieslies = Range(0,5,1) 
     
-    priority_projects = Property(List, depends_on = all_properties + ['selection'])
-    
+    priority_projects = Property(List, depends_on = all_properties + ['selection', 'priority_quadr'])
+    priority_quadr = Bool
     
     
     def _get_property_values(self):
@@ -148,6 +142,7 @@ class Portfolio(HasTraits):
                     Item('belang'),
                     Item('goeiedaad'),
                     Item('plieslies'),
+                    Item('priority_quadr', label = 'Kwadratisch algoritme'),
                     Item('priority_projects', label='Priority projects',editor=ListStrEditor(editable=False)),
                     label='Priorities'),
                 resizable=True
@@ -166,7 +161,10 @@ class Portfolio(HasTraits):
 #            print 'type of first operand', type(getattr(self, prop))  
 #            print 'second operand = ', self.property_values[prop]
 #            print 'type of second operand', type(self.property_values[prop])
-            priority += getattr(self, prop) * np.array(self.property_values[prop])
+            if self.priority_quadr:
+                priority += getattr(self, prop) * np.array(self.property_values[prop])**2
+            else:
+                priority += getattr(self, prop) * np.array(self.property_values[prop])
             
         sorted_projects = sorted(zip(priority, self.selection), reverse=True)
         return [str(project.projectnumber) + ' - ' + project.name + \
@@ -245,10 +243,13 @@ class Portfolio(HasTraits):
         """Read projects from a csv file"""
         
         import pandas as pd
-        df = pd.read_csv(filename, sep=';')
+        df = pd.read_csv(filename, sep='\t')
         for id, project in df.iterrows():
             kwargs = project.to_dict()
-            kwargs['tags'] = kwargs['tags'].split(',')
+            try:
+                kwargs['tags'] = kwargs['tags'].split(',')
+            except:
+                kwargs['tags'] = []
             if type(kwargs['comment']) is not str:
                 kwargs['comment'] = ''
             self.add_project(**kwargs)
@@ -258,26 +259,25 @@ class Portfolio(HasTraits):
         f = open(filename, 'w')
         # write the header
         columns = ['name','fun','belang','dringendheid','goeiedaad','plieslies','tags','comment']
-        f.write(';'.join(columns))
+        f.write('\t'.join(columns))
         f.write('\n')
         
         # write the lines, one per project
         for project in self.projects:
-            line = ';'.join([str(getattr(project, c)) for c in \
+            line = '\t'.join([str(getattr(project, c)) for c in \
                 ['name','fun','belang','dringendheid','goeiedaad','plieslies']])
-            line += ';'
+            line += '\t'
             line += ','.join(getattr(project, 'tags'))
-            line += ';' + project.comment
+            line += '\t' + project.comment
             line += '\n'
             f.write(line)
         f.close()
     
 
-
 if __name__ == "__main__":
 
     
     pf = Portfolio()
-    pf.read_csv('testwrite.csv')
+    pf.read_csv('MyProjectPortfolio.peppov')
     pf.configure_traits()
     
