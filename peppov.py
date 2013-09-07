@@ -14,6 +14,8 @@ from numpy import array,poly1d,arange,linspace
 from collections import OrderedDict
 import pdb
 import numpy as np
+import pareto
+import copy
 
 
 
@@ -67,18 +69,49 @@ class Portfolio(HasTraits):
     current_project = Int(default_value=1)   
     projects = List(Project)  # 
     selection = Property(List(Project), depends_on = ['projects', 'tags_to_include', 'tags_to_exclude']) # selection of projects, based on tags
+    pareto_front = Property(List(Project), depends_on = 'property_values') # pareto projects, based on selection
+    not_pareto_front = Property(List(Project), depends_on = 'pareto_front') # projects in selection that are NOT on the front
     repr_projects = Property(List, depends_on = 'projects')    
     repr_selection = Property(List, depends_on = 'selection')
+    repr_pareto_front = Property(List, depends_on = 'pareto_front')
+    repr_not_pareto_front = Property(List, depends_on = 'not_pareto_front')
+    
     
     #dictionary of property values, property:list of values
     property_values = Property(Dict, depends_on = "selection")  
     
+    # filtering
     tags_to_include = List(Str)
     tags_to_exclude = List(Str)
+    
+    # project editing
     button_add = Button("Add project")
     button_edit = Button("Edit project")
        
+    # pareto front
+    def _get_pareto_front(self):
+        self.pareto()
+        return [self.selection[x] for x in self._pareto_array[:,0]]
     
+    def pareto(self):
+        # compose array: first column is index of the project in the list self.selection
+        # next columns are values for all properties, in the order of self.all_properties
+        
+        array = np.array(range(len(self.selection))).reshape((len(self.selection), 1))
+        for prop in self.all_properties:
+            array = np.column_stack((array, np.array(self.property_values[prop])))
+    
+        sorted_array = pareto.sort_array_of_ints(array)
+        pareto_array = pareto.pareto(sorted_array)
+        self._pareto_array = pareto_array
+        
+    def _get_not_pareto_front(self):
+        res = copy.deepcopy(self.selection)
+        for x in sorted(self._pareto_array[:,0], reverse=True):
+            res.pop(x)
+        return res
+             
+        
     # Analysis
     to_plot_x = Str()
     to_plot_y = Str()
@@ -91,8 +124,9 @@ class Portfolio(HasTraits):
     goeiedaad = Range(0,5,1)
     plieslies = Range(0,5,1) 
     
-    priority_projects = Property(List, depends_on = all_properties + ['selection', 'priority_quadr'])
-    priority_quadr = Bool
+    priority_projects = Property(List, depends_on = all_properties + ['pareto_front', 'priority_quadr', 'priority_pareto'])
+    priority_quadr = Bool # if True, property values are squared when calculating the priority
+    priority_pareto = Bool # if True, compose priority list based on pareto_front, else based on selection
     
     
     def _get_property_values(self):
@@ -110,6 +144,12 @@ class Portfolio(HasTraits):
     
     def _get_repr_selection(self):
         return [str(p.projectnumber) + ' - ' + p.name for p in self.selection]
+        
+    def _get_repr_pareto_front(self):
+        return [str(p.projectnumber) + ' - ' + p.name for p in self.pareto_front]
+        
+    def _get_repr_not_pareto_front(self):
+        return [str(p.projectnumber) + ' - ' + p.name for p in self.not_pareto_front]
         
     def _get_x(self):
         return np.array(self.property_values.get(self.to_plot_x, np.zeros(len(self.selection))))
@@ -137,12 +177,17 @@ class Portfolio(HasTraits):
                                     x_label=to_plot_x.value, y_label=to_plot_y.value, title=""),
                     label='Analysis'),
                 Group(
+                    Item('repr_pareto_front', label='Projects on pareto front', editor=ListStrEditor(editable=False)),
+                    Item('repr_not_pareto_front', label='Projects NOT on pareto front', editor=ListStrEditor(editable=False)),
+                    label='Pareto'),
+                Group(
                     Item('fun'),
                     Item('dringendheid'),
                     Item('belang'),
                     Item('goeiedaad'),
                     Item('plieslies'),
                     Item('priority_quadr', label = 'Kwadratisch algoritme'),
+                    Item('priority_pareto', label = 'Enkel pareto front'),
                     Item('priority_projects', label='Priority projects',editor=ListStrEditor(editable=False)),
                     label='Priorities'),
                 resizable=True
@@ -157,16 +202,18 @@ class Portfolio(HasTraits):
         priority = np.zeros(len(self.selection))
         for prop in self.all_properties:
             #multiply the array of values with the weight, add to previous result
-#            print 'first operand = ', getattr(self, prop)             
-#            print 'type of first operand', type(getattr(self, prop))  
-#            print 'second operand = ', self.property_values[prop]
-#            print 'type of second operand', type(self.property_values[prop])
             if self.priority_quadr:
                 priority += getattr(self, prop) * np.array(self.property_values[prop])**2
             else:
                 priority += getattr(self, prop) * np.array(self.property_values[prop])
             
         sorted_projects = sorted(zip(priority, self.selection), reverse=True)
+        if self.priority_pareto:
+            # only take projects from the pareto front
+            # first, make list of projectnumbers of the front
+            projectnumbers = [p.projectnumber for p in self.pareto_front]
+            sel = filter(lambda tpl: tpl[1].projectnumber in projectnumbers, sorted_projects)
+            sorted_projects = sel
         return [str(project.projectnumber) + ' - ' + project.name + \
             ' - (priority = {})'.format(p) for (p, project) in sorted_projects]
 
@@ -278,6 +325,6 @@ if __name__ == "__main__":
 
     
     pf = Portfolio()
-    pf.read_csv('MyProjectPortfolio.peppov')
+    pf.read_csv('/home/roel/data/documents/persoonlijk/MyProjectPortfolio.peppov')
     pf.configure_traits()
     
