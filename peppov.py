@@ -16,6 +16,7 @@ import pdb
 import numpy as np
 import pareto
 import copy
+import os
 
 
 
@@ -39,8 +40,8 @@ class Project(HasTraits):
                         Item(name='comment'),
                         Item('tags', editor=CSVListEditor()),
                         Item('fun'),
-                        Item('dringendheid'),
                         Item('belang'),
+                        Item('dringendheid'),
                         Item('goeiedaad'),
                         Item('plieslies'),
                         
@@ -87,6 +88,9 @@ class Portfolio(HasTraits):
     # project editing
     button_add = Button("Add project")
     button_edit = Button("Edit project")
+    csv_file = Str
+    button_load = Button("Load from csv file")
+    button_save = Button("Save to csv file")
        
     # pareto front
     def _get_pareto_front(self):
@@ -136,20 +140,20 @@ class Portfolio(HasTraits):
         return property_values            
         
     def _get_repr_projects(self):
-        return [str(p.projectnumber) + ' - ' + p.name for p in self.projects]
+        return [str(p.projectnumber).zfill(2) + ' - ' + p.name for p in self.projects]
         
     def _get_selection(self):
         self.filter_projects(incl=self.tags_to_include, excl=self.tags_to_exclude)
         return self._selection
     
     def _get_repr_selection(self):
-        return [str(p.projectnumber) + ' - ' + p.name for p in self.selection]
+        return [str(p.projectnumber).zfill(2) + ' - ' + p.name for p in self.selection]
         
     def _get_repr_pareto_front(self):
-        return [str(p.projectnumber) + ' - ' + p.name for p in self.pareto_front]
+        return [str(p.projectnumber).zfill(2) + ' - ' + p.name for p in self.pareto_front]
         
     def _get_repr_not_pareto_front(self):
-        return [str(p.projectnumber) + ' - ' + p.name for p in self.not_pareto_front]
+        return [str(p.projectnumber).zfill(2) + ' - ' + p.name for p in self.not_pareto_front]
         
     def _get_x(self):
         return np.array(self.property_values.get(self.to_plot_x, np.zeros(len(self.selection))))
@@ -159,6 +163,9 @@ class Portfolio(HasTraits):
     
     view = View(
                 Group(
+                    Item("csv_file", label="CSV file to load / save"),
+                    UItem("button_load"),
+                    UItem("button_save"),
                     Item('repr_projects', label='Projects',editor=ListStrEditor(editable=False)),
                     UItem('button_add'),
                     Item('current_project', label='Project to edit'),
@@ -182,8 +189,8 @@ class Portfolio(HasTraits):
                     label='Pareto'),
                 Group(
                     Item('fun'),
-                    Item('dringendheid'),
                     Item('belang'),
+                    Item('dringendheid'),
                     Item('goeiedaad'),
                     Item('plieslies'),
                     Item('priority_quadr', label = 'Kwadratisch algoritme'),
@@ -214,7 +221,7 @@ class Portfolio(HasTraits):
             projectnumbers = [p.projectnumber for p in self.pareto_front]
             sel = filter(lambda tpl: tpl[1].projectnumber in projectnumbers, sorted_projects)
             sorted_projects = sel
-        return [str(project.projectnumber) + ' - ' + project.name + \
+        return [str(project.projectnumber).zfill(2) + ' ' + '*'*project.omvang + ' ' + project.name + \
             ' - (priority = {})'.format(p) for (p, project) in sorted_projects]
 
 
@@ -284,6 +291,12 @@ class Portfolio(HasTraits):
         
     def _button_edit_fired(self):
         self.edit_project(self.current_project)
+        
+    def _button_load_fired(self):
+        self.read_csv(filename=self.csv_file)
+        
+    def _button_save_fired(self):
+        self.save_csv(filename=self.csv_file)
           
         
     def read_csv(self, filename):
@@ -305,14 +318,14 @@ class Portfolio(HasTraits):
         
         f = open(filename, 'w')
         # write the header
-        columns = ['name','fun','belang','dringendheid','goeiedaad','plieslies','tags','comment']
+        columns = ['name','fun','belang','dringendheid','goeiedaad','plieslies','omvang','tags','comment']
         f.write('\t'.join(columns))
         f.write('\n')
         
         # write the lines, one per project
         for project in self.projects:
             line = '\t'.join([str(getattr(project, c)) for c in \
-                ['name','fun','belang','dringendheid','goeiedaad','plieslies']])
+                ['name','fun','belang','dringendheid','goeiedaad','plieslies','omvang']])
             line += '\t'
             line += ','.join(getattr(project, 'tags'))
             line += '\t' + project.comment
@@ -323,8 +336,12 @@ class Portfolio(HasTraits):
 
 if __name__ == "__main__":
 
+    if os.name == 'posix':
+        csv_file = '/home/roel/data/documents/persoonlijk/MyProjectPortfolio.peppov'
+    else:
+        csv_file = 'E:/documents/persoonlijk/MyProjectPortfolio.peppov'
     
-    pf = Portfolio()
-    pf.read_csv('/home/roel/data/documents/persoonlijk/MyProjectPortfolio.peppov')
+    pf = Portfolio(csv_file=csv_file)
+    pf.read_csv(csv_file)
     pf.configure_traits()
     
